@@ -1,6 +1,10 @@
 package go_trans
 
-import "sync"
+import (
+	"github.com/tangs-drm/go-trans/util"
+	"path/filepath"
+	"sync"
+)
 
 type TransCoder interface {
 	// Return the type of the transcode plug-in
@@ -18,11 +22,38 @@ type TransCoder interface {
 	// 		and the failure of the transcoding.
 	// error: Error information of the system.
 	Exec(input, output string, args map[string]interface{}) (string, error)
+
+	// Cancel the current transcoding task.
+	//
+	// error: error message.
+	Cancel() error
+
+	//
+	Process() (map[string]interface{}, error)
 }
 
 // Transcoding task scheduler
 type TransManage struct {
+	Formats []TransCoder
+	Format  map[string]TransCoder
+	Tasks   []*Task
+
 	lock *sync.Mutex
+}
+
+var DefaultFormats = []string{"flv"}
+
+func (tm *TransManage) SetFormats(formats []string) error {
+	return nil
+}
+
+func (tm *TransManage) RegisterFormats(format string, transCoder TransCoder) error {
+	if _, ok := tm.Format[format]; ok {
+		return util.Error("format: %v already exist", format)
+	}
+	tm.Formats = append(tm.Formats, transCoder)
+	tm.Format[format] = transCoder
+	return nil
 }
 
 // AddTask add a transcoding task, but just add the transcoding queue at this time,
@@ -30,7 +61,32 @@ type TransManage struct {
 //
 // input: Input filename.
 // output: Output filename.
-func (tm *TransManage) AddTask(intput, output string) {
+func (tm *TransManage) AddTask(input, output string) (Task, error) {
+	tm.lock.Lock()
+	defer tm.lock.Unlock()
+
+	// check input and output
+	var inputExt = filepath.Ext(input)
+	var outputExt = filepath.Ext(output)
+
+	if "" == inputExt {
+		return Task{}, util.Error("input is invalid: %v", input)
+	}
+	if "" == outputExt {
+		return Task{}, util.Error("output is invalid: %v", output)
+	}
+	var transCoder = tm.Format[inputExt]
+	if transCoder == nil {
+		return Task{}, util.Error("unsupported format: %v", inputExt)
+	}
+	var task = &Task{
+		Id:         util.UUID(),
+		Input:      input,
+		Output:     output,
+		TransCoder: transCoder,
+	}
+
+	return *task, nil
 }
 
 // ListTask list the transcoding task.
