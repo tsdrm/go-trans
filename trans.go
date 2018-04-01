@@ -2,11 +2,12 @@ package go_trans
 
 import (
 	"github.com/tangs-drm/go-trans/util"
+	"log"
 	"path/filepath"
 	"sync"
 )
 
-type TransCoder interface {
+type TransPlugin interface {
 	// Return the type of the transcode plug-in
 	Type() string
 
@@ -34,26 +35,79 @@ type TransCoder interface {
 
 // Transcoding task scheduler
 type TransManage struct {
-	Formats []TransCoder
-	Format  map[string]TransCoder
-	Tasks   []*Task
+	MaxRunningNum  int
+	CurrentRunning int
 
-	lock *sync.Mutex
+	Formats     []string
+	TransPlugin map[string]TransPlugin
+	Tasks       []*Task
+
+	addSign  chan int
+	execSign chan string
+	isLoop   bool
+	lock     *sync.Mutex
+}
+
+// The default number of transcoding threads
+var DefaultMaxRunningNum = 1
+
+// The default trans manager.
+var DefaultTransManager = &TransManage{
+	MaxRunningNum:  DefaultMaxRunningNum,
+	CurrentRunning: 0,
+
+	Formats:     []string{},
+	TransPlugin: map[string]TransPlugin{},
+	Tasks:       []*Task{},
+
+	addSign:  make(chan int, 256),
+	execSign: make(chan string, DefaultMaxRunningNum),
+	isLoop:   false,
+	lock:     &sync.Mutex{},
 }
 
 var DefaultFormats = []string{"flv"}
 
-func (tm *TransManage) SetFormats(formats []string) error {
+// Registering a supported transcode format with the transPlugin.
+//
+// format: video format like .flv, .avi.
+// transPlugin: transcoding plugin.
+//
+// error: error message.
+func (tm *TransManage) RegisterPlugin(format string, transPlugin TransPlugin) error {
+	if _, ok := tm.TransPlugin[format]; ok {
+		tm.TransPlugin[format] = transPlugin
+	}
+	tm.Formats = append(tm.Formats, format)
+	tm.TransPlugin[format] = transPlugin
 	return nil
 }
 
-func (tm *TransManage) RegisterFormats(format string, transCoder TransCoder) error {
-	if _, ok := tm.Format[format]; ok {
-		return util.Error("format: %v already exist", format)
+func RegisterPlugin(format string, transPlugin TransPlugin) error {
+	return DefaultTransManager.RegisterPlugin(format, transPlugin)
+}
+
+// GetFormats return the supported transcoding format
+func (tm *TransManage) GetFormats() []string {
+	return tm.Formats
+}
+
+func GetFormats() []string {
+	return DefaultTransManager.GetFormats()
+}
+
+// SetMaxRunningNum set the maximum number of transcoding threads.This method
+// is called if the call needs to be executed before method TransManage.Run().
+func (tm *TransManage) SetMaxRunningNum(num int) {
+	if num < 1 {
+		num = 1
 	}
-	tm.Formats = append(tm.Formats, transCoder)
-	tm.Format[format] = transCoder
-	return nil
+	tm.execSign = make(chan string, num)
+	tm.MaxRunningNum = num
+}
+
+func SetRuningNum(num int) {
+	DefaultTransManager.SetMaxRunningNum(num)
 }
 
 // AddTask add a transcoding task, but just add the transcoding queue at this time,
@@ -75,18 +129,32 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 	if "" == outputExt {
 		return Task{}, util.Error("output is invalid: %v", output)
 	}
-	var transCoder = tm.Format[inputExt]
-	if transCoder == nil {
+	var plugin = tm.TransPlugin[inputExt]
+	if plugin == nil {
 		return Task{}, util.Error("unsupported format: %v", inputExt)
 	}
 	var task = &Task{
-		Id:         util.UUID(),
-		Input:      input,
-		Output:     output,
-		TransCoder: transCoder,
+		Id:          util.UUID(),
+		Input:       input,
+		Output:      output,
+		TransPlugin: plugin,
 	}
 
+	// todo. save into database.
+	tm.Tasks = append(tm.Tasks, task)
+
+	tm.addSign <- 1
+
 	return *task, nil
+}
+
+func (tm *TransManage) StartTask() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("TransManage error: %v", err)
+		}
+	}()
+
 }
 
 // ListTask list the transcoding task.
