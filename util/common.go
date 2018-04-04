@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 // create a 32-bit string by md5
@@ -37,8 +38,18 @@ func UUID() string {
 	return fmt.Sprintf("%v-%v-%v-%v-%v", uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:])
 }
 
-// Error return a error with format.
-func Error(format string, a ...interface{}) error {
+// NewError return a error with format.
+func NewError(format string, a ...interface{}) error {
 	var text = fmt.Sprintf(format, a...)
 	return errors.New(text)
+}
+
+func Now13() int64 {
+	var now = time.Now()
+	return int64(now.UnixNano() / 1e6)
+}
+
+func Now10() int64 {
+	var now = time.Now()
+	return now.Unix()
 }

@@ -76,18 +76,34 @@ func testUuid(t *testing.T, times int) {
 
 func TestError(t *testing.T) {
 	var err error
-	err = Error("%v", "halo")
+	err = NewError("%v", "halo")
 
 	if err == nil || err.Error() != "halo" {
 		t.Error(err)
 		return
 	}
 
-	err = Error("aaa%vbbb%v", 123, 456)
+	err = NewError("aaa%vbbb%v", 123, 456)
 	if err == nil || err.Error() != "aaa123bbb456" {
 		t.Error(err)
 		return
 	}
 
 	log.Println("TestError test success")
+}
+
+func TestNow(t *testing.T) {
+	var now = Now13()
+	fmt.Println(now)
+	if now/1e12 > 10 || now/1e12 < 1 {
+		t.Error(now)
+		return
+	}
+
+	now = Now10()
+	fmt.Println(now)
+	if now/1e9 > 10 || now/1e9 < 1 {
+		t.Error(now)
+		return
+	}
 }

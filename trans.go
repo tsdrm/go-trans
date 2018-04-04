@@ -18,11 +18,12 @@ type TransPlugin interface {
 	// args: The parameters of the transcoding execution, such as
 	//		{"-b:v": 1200000, "-r": 30}.
 	//
-	// string: The output information of the transcoding,
+	// int: Status code, see error.go for detail.
+	// TransMessage: The output information of the transcoding,
 	// 		including the printing information of the transcoding success
 	// 		and the failure of the transcoding.
-	// error: Error information of the system.
-	Exec(input, output string, args map[string]interface{}) (string, error)
+	// error: NewError information of the system.
+	Exec(input, output string, args map[string]interface{}) (int, TransMessage, error)
 
 	// Cancel the current transcoding task.
 	//
@@ -33,6 +34,11 @@ type TransPlugin interface {
 	Process() (map[string]interface{}, error)
 }
 
+const (
+	TransRunning = "running"
+	TransStop    = "stop"
+)
+
 // Transcoding task scheduler
 type TransManage struct {
 	MaxRunningNum  int
@@ -42,14 +48,18 @@ type TransManage struct {
 	TransPlugin map[string]TransPlugin
 	Tasks       []*Task
 
-	addSign  chan int
-	execSign chan string
-	isLoop   bool
-	lock     *sync.Mutex
+	TryTimes int
+	Status   string
+
+	addSign chan int
+	isLoop  bool
+	lock    *sync.Mutex
 }
 
 // The default number of transcoding threads
 var DefaultMaxRunningNum = 1
+
+var DefaultTryTimes = 1
 
 // The default trans manager.
 var DefaultTransManager = &TransManage{
@@ -60,10 +70,12 @@ var DefaultTransManager = &TransManage{
 	TransPlugin: map[string]TransPlugin{},
 	Tasks:       []*Task{},
 
-	addSign:  make(chan int, 256),
-	execSign: make(chan string, DefaultMaxRunningNum),
-	isLoop:   false,
-	lock:     &sync.Mutex{},
+	TryTimes: DefaultTryTimes,
+	Status:   TransStop,
+
+	addSign: make(chan int, 256),
+	isLoop:  false,
+	lock:    &sync.Mutex{},
 }
 
 var DefaultFormats = []string{"flv"}
@@ -99,14 +111,10 @@ func GetFormats() []string {
 // SetMaxRunningNum set the maximum number of transcoding threads.This method
 // is called if the call needs to be executed before method TransManage.Run().
 func (tm *TransManage) SetMaxRunningNum(num int) {
-	if num < 1 {
-		num = 1
-	}
-	tm.execSign = make(chan string, num)
 	tm.MaxRunningNum = num
 }
 
-func SetRuningNum(num int) {
+func SetMaxRunningNum(num int) {
 	DefaultTransManager.SetMaxRunningNum(num)
 }
 
@@ -124,20 +132,20 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 	var outputExt = filepath.Ext(output)
 
 	if "" == inputExt {
-		return Task{}, util.Error("input is invalid: %v", input)
+		return Task{}, util.NewError("input is invalid: %v", input)
 	}
 	if "" == outputExt {
-		return Task{}, util.Error("output is invalid: %v", output)
+		return Task{}, util.NewError("output is invalid: %v", output)
 	}
 	var plugin = tm.TransPlugin[inputExt]
 	if plugin == nil {
-		return Task{}, util.Error("unsupported format: %v", inputExt)
+		return Task{}, util.NewError("unsupported format: %v", inputExt)
 	}
 	var task = &Task{
-		Id:          util.UUID(),
-		Input:       input,
-		Output:      output,
-		TransPlugin: plugin,
+		Id:     util.UUID(),
+		Input:  input,
+		Output: output,
+		Plugin: plugin,
 	}
 
 	// todo. save into database.
@@ -148,13 +156,46 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 	return *task, nil
 }
 
-func (tm *TransManage) StartTask() {
+func RunTask() {
+	go DefaultTransManager.runTask()
+}
+
+func (tm *TransManage) runTask() {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("TransManage error: %v", err)
 		}
 	}()
 
+	for {
+		<-tm.addSign
+		if tm.CurrentRunning >= tm.MaxRunningNum {
+			continue
+		}
+
+		for _, task := range tm.Tasks {
+			if TASK_RUNNING == task.Status {
+				continue
+			}
+			go tm.exec(task)
+		}
+	}
+}
+
+func (tm *TransManage) exec(task *Task) {
+	code, result, err1 := task.Plugin.Exec(task.Input, task.Output, task.Args)
+	call := Call{
+		Code:         code,
+		Error:        ErrorCode[code],
+		ErrorMessage: err1,
+		Task:         *task,
+		Message:      result,
+	}
+	err2 := tm.CallBack(call)
+	if err2 != nil {
+		// todo something.
+	}
+	tm.addSign <- 1
 }
 
 // ListTask list the transcoding task.
@@ -176,6 +217,6 @@ func (tm *TransManage) Process(id []string) {
 
 }
 
-func (tm *TransManage) CallBack(id string) error {
+func (tm *TransManage) CallBack(call Call) error {
 	return nil
 }
