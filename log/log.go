@@ -1,4 +1,4 @@
-package util
+package log
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ var logger = NewLogger()
 // NewLogger返回一个新log对象
 func NewLogger() *Logger {
 	return &Logger{
-		Log: log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile),
+		Log: log.New(os.Stdout, "", log.LstdFlags|log.Lmicroseconds|log.Lshortfile),
 	}
 }
 
@@ -50,7 +50,7 @@ func RedirectFile(file string) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_SYNC, 0755)
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_SYNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func RedirectFile(file string) error {
 }
 
 // Debug message
-func Debug(format string, args ...interface{}) {
+func D(format string, args ...interface{}) {
 	if DEBUG < logger.Level {
 		return
 	}
@@ -67,7 +67,7 @@ func Debug(format string, args ...interface{}) {
 }
 
 // Info message
-func Info(format string, args ...interface{}) {
+func I(format string, args ...interface{}) {
 	if INFO < logger.Level {
 		return
 	}
@@ -75,7 +75,7 @@ func Info(format string, args ...interface{}) {
 }
 
 // Warning message
-func Warning(format string, args ...interface{}) {
+func W(format string, args ...interface{}) {
 	if WARNING < logger.Level {
 		return
 	}
@@ -83,7 +83,7 @@ func Warning(format string, args ...interface{}) {
 }
 
 // Error message
-func Error(format string, args ...interface{}) {
+func E(format string, args ...interface{}) {
 	if ERROR < logger.Level {
 		return
 	}
@@ -91,7 +91,7 @@ func Error(format string, args ...interface{}) {
 }
 
 // Debug message
-func (l *Logger) Debug(format string, args ...interface{}) {
+func (l *Logger) D(format string, args ...interface{}) {
 	if DEBUG < logger.Level {
 		return
 	}
@@ -99,7 +99,7 @@ func (l *Logger) Debug(format string, args ...interface{}) {
 }
 
 // Info message
-func (l *Logger) Info(format string, args ...interface{}) {
+func (l *Logger) I(format string, args ...interface{}) {
 	if INFO < logger.Level {
 		return
 	}
@@ -107,7 +107,7 @@ func (l *Logger) Info(format string, args ...interface{}) {
 }
 
 // Warning message
-func (l *Logger) Warning(format string, args ...interface{}) {
+func (l *Logger) W(format string, args ...interface{}) {
 	if WARNING < logger.Level {
 		return
 	}
@@ -115,7 +115,7 @@ func (l *Logger) Warning(format string, args ...interface{}) {
 }
 
 // Error message
-func (l *Logger) Error(format string, args ...interface{}) {
+func (l *Logger) E(format string, args ...interface{}) {
 	if ERROR < logger.Level {
 		return
 	}

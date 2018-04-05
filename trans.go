@@ -1,10 +1,14 @@
 package go_trans
 
 import (
+	"github.com/tangs-drm/go-trans/log"
 	"github.com/tangs-drm/go-trans/util"
-	"log"
+	"math/rand"
+	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 )
 
 type TransPlugin interface {
@@ -26,34 +30,44 @@ type TransPlugin interface {
 	Exec(input, output string, args map[string]interface{}) (int, TransMessage, error)
 
 	// Cancel the current transcoding task.
-	//
 	// error: error message.
 	Cancel() error
 
+	// Progress return the current transcoding progress.
 	//
-	Process() (map[string]interface{}, error)
+	// map[string]interface{}:
+	// error: error message.
+	Progress() (map[string]interface{}, error)
 }
 
 const (
-	TransRunning = "running"
-	TransStop    = "stop"
+	TransRunning  = "Running"
+	TransError    = "Error"
+	TransCancel   = "Cancel"
+	TransNotStart = "Not Start"
+	TransSuccess  = "Success"
 )
 
 // Transcoding task scheduler
 type TransManage struct {
-	MaxRunningNum  int
+	// Maximum number of transcoding threads.
+	MaxRunningNum int
+	// The number of transcoding threads that are currently running.
 	CurrentRunning int
 
 	Formats     []string
 	TransPlugin map[string]TransPlugin
 	Tasks       []*Task
 
+	// Transcode callback error retry times.
 	TryTimes int
 	Status   string
 
-	addSign chan int
-	isLoop  bool
-	lock    *sync.Mutex
+	// Callback address after transcoding
+	Address string
+
+	sign chan int
+	lock *sync.Mutex
 }
 
 // The default number of transcoding threads
@@ -71,11 +85,10 @@ var DefaultTransManager = &TransManage{
 	Tasks:       []*Task{},
 
 	TryTimes: DefaultTryTimes,
-	Status:   TransStop,
+	Status:   TransNotStart,
 
-	addSign: make(chan int, 256),
-	isLoop:  false,
-	lock:    &sync.Mutex{},
+	sign: make(chan int, 256),
+	lock: &sync.Mutex{},
 }
 
 var DefaultFormats = []string{"flv"}
@@ -118,6 +131,15 @@ func SetMaxRunningNum(num int) {
 	DefaultTransManager.SetMaxRunningNum(num)
 }
 
+// Set callback address. like http://callback.example.com/callback
+func SetCallbackAddress(addr string) {
+	DefaultTransManager.SetCallbackAddress(addr)
+}
+
+func (tm *TransManage) SetCallbackAddress(addr string) {
+	tm.Address = addr
+}
+
 // AddTask add a transcoding task, but just add the transcoding queue at this time,
 // and do not really start transcoding.
 //
@@ -130,16 +152,23 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 	// check input and output
 	var inputExt = filepath.Ext(input)
 	var outputExt = filepath.Ext(output)
+	var err error
 
 	if "" == inputExt {
-		return Task{}, util.NewError("input is invalid: %v", input)
+		err = util.NewError("input is invalid: %v", input)
+		log.E("AddTask error with input: %v", err)
+		return Task{}, err
 	}
 	if "" == outputExt {
-		return Task{}, util.NewError("output is invalid: %v", output)
+		err = util.NewError("output is invalid: %v", output)
+		log.E("AddTask error with output: %v", err)
+		return Task{}, err
 	}
 	var plugin = tm.TransPlugin[inputExt]
 	if plugin == nil {
-		return Task{}, util.NewError("unsupported format: %v", inputExt)
+		err = util.NewError("unsupported format: %v", inputExt)
+		log.E("AddTask error with format: %v", err)
+		return Task{}, err
 	}
 	var task = &Task{
 		Id:     util.UUID(),
@@ -151,7 +180,7 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 	// todo. save into database.
 	tm.Tasks = append(tm.Tasks, task)
 
-	tm.addSign <- 1
+	tm.sign <- 1
 
 	return *task, nil
 }
@@ -163,18 +192,17 @@ func RunTask() {
 func (tm *TransManage) runTask() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Printf("TransManage error: %v", err)
 		}
 	}()
 
 	for {
-		<-tm.addSign
+		<-tm.sign
 		if tm.CurrentRunning >= tm.MaxRunningNum {
 			continue
 		}
 
 		for _, task := range tm.Tasks {
-			if TASK_RUNNING == task.Status {
+			if TASK_WAITING == task.Status {
 				continue
 			}
 			go tm.exec(task)
@@ -183,6 +211,7 @@ func (tm *TransManage) runTask() {
 }
 
 func (tm *TransManage) exec(task *Task) {
+	task.Status = TransRunning
 	code, result, err1 := task.Plugin.Exec(task.Input, task.Output, task.Args)
 	call := Call{
 		Code:         code,
@@ -191,11 +220,50 @@ func (tm *TransManage) exec(task *Task) {
 		Task:         *task,
 		Message:      result,
 	}
+	if err1 != nil {
+		log.E("TransManage exec task: %v complete with code %v, err %v", util.S2Json(task), code, err1)
+		task.Status = TransError
+	} else {
+		log.D("TransManage exec task: %v complete with result: %v", util.S2Json(task), util.S2Json(result))
+		task.Status = TransSuccess
+	}
 	err2 := tm.CallBack(call)
 	if err2 != nil {
-		// todo something.
+		log.E("TransManage exec task: %v complete but error with callback: %v, error: %v", util.S2Json(task), util.S2Json(call), err2)
+	} else {
+		log.D("TransManage exec task: %v complete and callback success")
 	}
-	tm.addSign <- 1
+	tm.sign <- 1
+
+	tm.lock.Lock()
+	tm.popTask(task.Id)
+	tm.lock.Unlock()
+}
+
+func (tm *TransManage) popTask(taskId string) error {
+	for index, task := range tm.Tasks {
+		if task.Id != taskId {
+			continue
+		}
+
+		if 0 == index {
+			tm.Tasks = tm.Tasks[1:]
+			return nil
+		}
+
+		var length = len(tm.Tasks)
+		if length-1 == index {
+			tm.Tasks = tm.Tasks[:length-1]
+			return nil
+		}
+
+		var tasks = append(tm.Tasks)
+		tm.Tasks = tasks[0:index]
+		tm.Tasks = append(tm.Tasks, tasks[index+1:]...)
+		return nil
+
+	}
+	return util.NewError("%v", TransNotFound)
 }
 
 // ListTask list the transcoding task.
@@ -209,8 +277,27 @@ func (tm *TransManage) ListTask(limit, skip int) ([]Task, int) {
 	return nil, 0
 }
 
-func (tm *TransManage) Cancel(id string) error {
-	return nil
+// Cancel the transcoding process by taskId.
+// It will return error TransNotFound if can't find task.
+// todo. If exec Callback here?
+func (tm *TransManage) Cancel(taskId string) error {
+	tm.lock.Lock()
+	defer tm.lock.Unlock()
+
+	for _, task := range tm.Tasks {
+		if task.Id != taskId {
+			continue
+		}
+
+		var err = task.Plugin.Cancel()
+		if err != nil {
+			return err
+		}
+		task.Status = TransCancel
+		tm.popTask(taskId)
+		return nil
+	}
+	return util.NewError("%v", TransNotFound)
 }
 
 func (tm *TransManage) Process(id []string) {
@@ -218,5 +305,27 @@ func (tm *TransManage) Process(id []string) {
 }
 
 func (tm *TransManage) CallBack(call Call) error {
-	return nil
+	if "" == tm.Address {
+		log.W("CallBack will return because of empty address")
+		return nil
+	}
+
+	for i := 0; i < tm.TryTimes; i++ {
+		resp, err := http.Post(tm.Address, "application/json", strings.NewReader(util.S2Json(call)))
+		if err != nil {
+			log.W("CallBack with retryTime: %v, address: %v, call: %v error: %v", i, tm.Address, util.S2Json(call), err)
+			duration := time.Duration(rand.Intn(10)+10) * time.Second
+			time.Sleep(duration)
+			continue
+		}
+		if http.StatusOK != resp.StatusCode {
+			log.W("CallBack with retryTime: %v, address: %v, call: %v code: %v", i, tm.Address, util.S2Json(call), resp.StatusCode)
+			duration := time.Duration(rand.Intn(10)+10) * time.Second
+			time.Sleep(duration)
+			continue
+		}
+		log.W("CallBack with retryTime: %v, address: %v, call: %v success", i, tm.Address, util.S2Json(call))
+		return nil
+	}
+	return util.NewError("%v", TransTooManyTimes)
 }

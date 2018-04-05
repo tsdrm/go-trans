@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +13,7 @@ import (
 	"time"
 )
 
-// create a 32-bit string by md5
+// create a 32-bit string by md5.
 func getMd5String(s string) string {
 	h := md5.New()
 	h.Write([]byte(s))
@@ -29,7 +30,7 @@ func UUIDString() string {
 	return strings.ToUpper(getMd5String(base64.URLEncoding.EncodeToString(b)))
 }
 
-// Generate globally unique uuid
+// Generate globally unique uuid.
 func UUID() string {
 	uuid := UUIDString()
 	if "" == uuid {
@@ -44,12 +45,25 @@ func NewError(format string, a ...interface{}) error {
 	return errors.New(text)
 }
 
+// Now13 return 13 bit timestamp.
 func Now13() int64 {
 	var now = time.Now()
 	return int64(now.UnixNano() / 1e6)
 }
 
+// Now return 10 bit timestamp.
 func Now10() int64 {
 	var now = time.Now()
 	return now.Unix()
+}
+
+// S2Json trans data to json, e.g struct, map and so on.
+func S2Json(data interface{}) string {
+	bys, _ := json.Marshal(data)
+	return string(bys)
+}
+
+// Json2S trans json to object
+func Json2S(src string, dest interface{}) error {
+	return json.Unmarshal([]byte(src), dest)
 }
