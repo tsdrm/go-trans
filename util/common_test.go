@@ -107,3 +107,32 @@ func TestNow(t *testing.T) {
 		return
 	}
 }
+
+func TestS2Json(t *testing.T) {
+	var output string
+	var mp = map[string]string{
+		"a": "b",
+	}
+	output = S2Json(mp)
+	if output != `{"a":"b"}` {
+		t.Error(output)
+		return
+	}
+
+	var mp_check map[string]string
+	var err = Json2S(output, &mp_check)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if mp_check == nil || mp_check["a"] != "b" || len(mp_check) != 1 {
+		t.Error(mp_check)
+		return
+	}
+
+	err = Json2S("halo", &mp_check)
+	if err == nil {
+		t.Error(err)
+		return
+	}
+}

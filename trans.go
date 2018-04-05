@@ -55,9 +55,11 @@ type TransManage struct {
 	// The number of transcoding threads that are currently running.
 	CurrentRunning int
 
+	// Formats of transcoding support
 	Formats     []string
 	TransPlugin map[string]TransPlugin
-	Tasks       []*Task
+	// Transcoding task list
+	Tasks []*Task
 
 	// Transcode callback error retry times.
 	TryTimes int
@@ -74,24 +76,20 @@ type TransManage struct {
 var DefaultMaxRunningNum = 1
 
 var DefaultTryTimes = 1
+var DefaultFormats = []string{"flv"}
 
 // The default trans manager.
 var DefaultTransManager = &TransManage{
 	MaxRunningNum:  DefaultMaxRunningNum,
 	CurrentRunning: 0,
-
-	Formats:     []string{},
-	TransPlugin: map[string]TransPlugin{},
-	Tasks:       []*Task{},
-
-	TryTimes: DefaultTryTimes,
-	Status:   TransNotStart,
-
-	sign: make(chan int, 256),
-	lock: &sync.Mutex{},
+	Formats:        DefaultFormats,
+	TransPlugin:    map[string]TransPlugin{},
+	Tasks:          []*Task{},
+	TryTimes:       DefaultTryTimes,
+	Status:         TransNotStart,
+	sign:           make(chan int, 256),
+	lock:           &sync.Mutex{},
 }
-
-var DefaultFormats = []string{"flv"}
 
 // Registering a supported transcode format with the transPlugin.
 //

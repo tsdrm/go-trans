@@ -1,32 +1,58 @@
 package util
 
 import (
-	"bufio"
-	"fmt"
-	"io"
+	"errors"
 	"os/exec"
+	"time"
 )
 
-func ExecCmd(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
+// Default timeout time for shell execution.
+var DefaultTimeout = 120 * time.Minute
+
+type Cmder struct {
+	*exec.Cmd
+
+	// Timeout for command.
+	Timeout time.Duration
+}
+
+func NewCmder() *Cmder {
+	return &Cmder{
+		Timeout: DefaultTimeout,
 	}
-	err = cmd.Start()
-	if err != nil {
-		return err
+}
+
+// Set the shell execution timeout.
+func (c *Cmder) SetTimeout(timeout time.Duration) {
+	c.Timeout = timeout
+}
+
+// Start executing the command
+//
+// name: command name.
+// args: command args.
+//
+// string: standard output string of the command.
+// error: error message
+func (c *Cmder) Command(name string, args ...string) (string, error) {
+	var err error
+	var output string
+	var bys []byte
+
+	c.Cmd = exec.Command(name, args...)
+
+	var run = make(chan int)
+
+	go func() {
+		bys, err = c.Cmd.CombinedOutput()
+		run <- 1
+	}()
+	select {
+	case <-run:
+		output = string(bys)
+	case <-time.After(c.Timeout):
+		err = errors.New("time out")
 	}
 
-	reader := bufio.NewReader(stdout)
-
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil || io.EOF == err {
-			break
-		}
-		fmt.Println(line)
-	}
-	cmd.Wait()
-	return nil
+	return output, err
 }
