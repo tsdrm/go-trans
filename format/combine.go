@@ -3,7 +3,6 @@ package format
 import (
 	"github.com/tangs-drm/go-trans"
 	"github.com/tangs-drm/go-trans/format/flv"
-	"github.com/tangs-drm/go-trans/format/other"
 )
 
 func Init() {
@@ -13,12 +12,10 @@ func Init() {
 	}
 }
 
-func getTransPlugin(format string) go_trans.TransPlugin {
+func getTransPlugin(format string) func() go_trans.TransPlugin {
 	switch format {
 	case "flv":
-		return flv.Flv{}
-	case "other":
-		return other.Other{}
+		return func() go_trans.TransPlugin { return &flv.Flv{} }
 	}
 	return nil
 }

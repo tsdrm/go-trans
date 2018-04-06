@@ -56,8 +56,9 @@ type TransManage struct {
 	CurrentRunning int
 
 	// Formats of transcoding support
-	Formats     []string
-	TransPlugin map[string]TransPlugin
+	Formats []string
+	//
+	TransPlugin map[string]func() TransPlugin
 	// Transcoding task list
 	Tasks []*Task
 
@@ -83,7 +84,7 @@ var DefaultTransManager = &TransManage{
 	MaxRunningNum:  DefaultMaxRunningNum,
 	CurrentRunning: 0,
 	Formats:        DefaultFormats,
-	TransPlugin:    map[string]TransPlugin{},
+	TransPlugin:    map[string]func() TransPlugin{},
 	Tasks:          []*Task{},
 	TryTimes:       DefaultTryTimes,
 	Status:         TransNotStart,
@@ -97,17 +98,18 @@ var DefaultTransManager = &TransManage{
 // transPlugin: transcoding plugin.
 //
 // error: error message.
-func (tm *TransManage) RegisterPlugin(format string, transPlugin TransPlugin) error {
-	if _, ok := tm.TransPlugin[format]; ok {
-		tm.TransPlugin[format] = transPlugin
+func (tm *TransManage) RegisterPlugin(format string, plugin func() TransPlugin) {
+	tm.TransPlugin[format] = plugin
+	for _, format := range tm.Formats {
+		if format == format {
+			return
+		}
 	}
 	tm.Formats = append(tm.Formats, format)
-	tm.TransPlugin[format] = transPlugin
-	return nil
 }
 
-func RegisterPlugin(format string, transPlugin TransPlugin) error {
-	return DefaultTransManager.RegisterPlugin(format, transPlugin)
+func RegisterPlugin(format string, plugin func() TransPlugin) {
+	DefaultTransManager.RegisterPlugin(format, plugin)
 }
 
 // GetFormats return the supported transcoding format
@@ -172,7 +174,7 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 		Id:     util.UUID(),
 		Input:  input,
 		Output: output,
-		Plugin: plugin,
+		Plugin: plugin(),
 	}
 
 	// todo. save into database.
