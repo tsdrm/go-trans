@@ -5,12 +5,12 @@ const TASK_WAITING = "waiting"
 
 // Transcoding task
 type Task struct {
-	Id     string                 `json:"id"`
-	Input  string                 `json:"input"`
-	Output string                 `json:"output"`
-	Status string                 `json:"status"`
-	Args   map[string]interface{} `json:"args"`
-	Plugin TransPlugin            `json:"-"`
+	Id     string            `json:"id"`
+	Input  string            `json:"input"`
+	Output string            `json:"output"`
+	Status string            `json:"status"`
+	Args   map[string]string `json:"args"`
+	Plugin TransPlugin       `json:"-"`
 }
 
 type Call struct {

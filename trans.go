@@ -27,7 +27,7 @@ type TransPlugin interface {
 	// 		including the printing information of the transcoding success
 	// 		and the failure of the transcoding.
 	// error: NewError information of the system.
-	Exec(input, output string, args map[string]interface{}) (int, TransMessage, error)
+	Exec(input, output string, args map[string]string) (int, TransMessage, error)
 
 	// Cancel the current transcoding task.
 	// error: error message.
@@ -38,6 +38,9 @@ type TransPlugin interface {
 	// map[string]interface{}:
 	// error: error message.
 	Progress() (map[string]interface{}, error)
+
+	// Pid return the system pid of the process. It return -1 if command is nil.
+	Pid() int
 }
 
 const (
