@@ -20,11 +20,13 @@ func (flv *Flv) Type() string {
 	return TYPE_FLV
 }
 
-func (flv *Flv) Exec(input, output string, args map[string]string) (int, go_trans.TransMessage, error) {
+func (flv *Flv) Exec(input, output string, args util.Map) (int, go_trans.TransMessage, error) {
 	var params = []string{}
-	for k, v := range args {
-		params = append(params, k, v)
+	params = append(params, "-i", input)
+	for k := range args {
+		params = append(params, k, args.String(k))
 	}
+	params = append(params, "-y", output)
 
 	// Get file info from ffprobe
 	var cmder = util.NewCmder()
@@ -41,19 +43,19 @@ func (flv *Flv) Exec(input, output string, args map[string]string) (int, go_tran
 	}
 	var format = cmdFormat.Map("format")
 
-	var beg, end int64 = util.Now13(), 0
 	// Start to exec transcoding task.
+	var beg, end int64 = util.Now13(), 0
 	flv.Cmd = exec.Command("ffmpeg", params...)
 	flv.Cmd.Stdout = flv.Cmd.Stderr
-	stdout, err := flv.Cmd.StdoutPipe()
+	stdout, err := flv.Cmd.StderrPipe()
 	if err != nil {
-		log.E("TYPE_FLV command get StdoutPipe with input: %v, output: %v error: %v", input, output, err)
+		log.E("TYPE_FLV command get StdoutPipe with input: %v, output: %v, params: %v error: %v", input, output, params, err)
 		return go_trans.TransSystemError, go_trans.TransMessage{}, err
 	}
 
 	err = flv.Cmd.Start()
 	if err != nil {
-		log.E("TYPE_FLV command start with input: %v, output: %v error: %v", input, output, err)
+		log.E("TYPE_FLV command start with input: %v, output: %v, params: %v error: %v", input, output, params, err)
 		return go_trans.TransCommandError, go_trans.TransMessage{}, err
 	}
 
@@ -62,7 +64,7 @@ func (flv *Flv) Exec(input, output string, args map[string]string) (int, go_tran
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if io.EOF != err {
-				log.E("TYPE_FLV reader read string with input: %v, output: %v error: %v", input, output, err)
+				log.E("TYPE_FLV reader read string with input: %v, output: %v, params: %v error: %v", input, output, params, err)
 				return go_trans.TransCommandError, go_trans.TransMessage{}, err
 			}
 			break
@@ -71,7 +73,7 @@ func (flv *Flv) Exec(input, output string, args map[string]string) (int, go_tran
 	}
 	err = flv.Cmd.Wait()
 	if err != nil {
-		log.E("TYPE_FLV command wait with input: %v, output: %v error: %v", input, output, err)
+		log.E("TYPE_FLV command wait with input: %v, output: %v, params: %v error: %v", input, output, params, err)
 		return go_trans.TransCommandError, go_trans.TransMessage{}, err
 	}
 	end = util.Now13()
@@ -86,6 +88,7 @@ func (flv *Flv) Exec(input, output string, args map[string]string) (int, go_tran
 		CreationTime: beg,
 		Duration:     format.Float32("duration"),
 	}
+	log.D("TYPE_FLV command with input: %v, output: %v, params: %v success with message: %v", input, output, params, util.S2Json(message))
 
 	return go_trans.TransOk, message, nil
 }
@@ -99,7 +102,7 @@ func (flv *Flv) Pid() int {
 
 func (flv *Flv) Cancel() error {
 	if flv.Cmd == nil {
-		return util.NewError("%v", go_trans.TransProcessNotExist)
+		return util.NewError("%v", go_trans.ErrorCode[go_trans.TransProcessNotExist])
 	}
 
 	return flv.Cmd.Process.Kill()
