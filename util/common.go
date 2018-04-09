@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -55,15 +54,4 @@ func Now13() int64 {
 func Now10() int64 {
 	var now = time.Now()
 	return now.Unix()
-}
-
-// S2Json trans data to json, e.g struct, map and so on.
-func S2Json(data interface{}) string {
-	bys, _ := json.Marshal(data)
-	return string(bys)
-}
-
-// Json2S trans json to object
-func Json2S(src string, dest interface{}) error {
-	return json.Unmarshal([]byte(src), dest)
 }
