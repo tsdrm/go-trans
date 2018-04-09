@@ -1,2 +1,10 @@
 # go-trans
-用golang实现的视频转码服务器
+
+* Video transcoding server implemented by golang
+
+A video transcoding server under development that relies on ffmpeg.
+
+### TODO
++ [ ] Get the progress of transcoding
++ [ ] It stops transcoding if transcoding timeout
+...
