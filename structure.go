@@ -22,12 +22,12 @@ type Call struct {
 }
 
 type TransMessage struct {
-	Input        InputFile `json:"input"`
-	Size         int       `json:"size"`
-	Position     string    `json:"position"`
-	Cost         int       `json:"cost"`
-	CreationTime int64     `json:"creationTime"`
-	Duration     int       `json:"duration"`
+	Input        InputFile `json:"input"`        // input info
+	Size         int       `json:"size"`         // input file size
+	Position     string    `json:"position"`     // transcoding server name
+	Cost         int       `json:"cost"`         // the time cost of transcoding
+	CreationTime int64     `json:"creationTime"` // create time
+	Duration     float32   `json:"duration"`     // the duration of input file
 }
 
 type InputFile struct {
