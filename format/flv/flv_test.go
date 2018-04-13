@@ -30,18 +30,18 @@ func TestFlvTransCoding(t *testing.T) {
 	var args = util.Map{}
 
 	// error with empty input
-	code, message, err := f.Exec(input, output, args)
-	if err == nil {
-		t.Error(err)
+	code, message, transErr := f.Exec(input, output, args)
+	if transErr.Err == nil {
+		t.Error(transErr.Err, transErr.Lines)
 		return
 	}
 
 	// success with empty args
 	input = "../../data/videos/f0.flv"
 	output = "../../data/output/" + util.UUID() + ".mp4"
-	code, message, err = f.Exec(input, output, args)
-	if err != nil {
-		t.Error(err)
+	code, message, transErr = f.Exec(input, output, args)
+	if transErr.Err != nil {
+		t.Error(transErr.Err, transErr.Lines)
 		return
 	}
 	log.D("code: %v, message: %v", code, util.S2Json(message))
@@ -50,10 +50,9 @@ func TestFlvTransCoding(t *testing.T) {
 	args = util.Map{"-s": "1280*720"}
 	input = "../../data/videos/f0.flv"
 	output = "../../data/output/" + util.UUID() + ".mp4"
-	code, message, err = f.Exec(input, output, args)
-	if err != nil {
-		t.Error(f.Lines)
-		t.Error(err)
+	code, message, transErr = f.Exec(input, output, args)
+	if transErr.Err != nil {
+		t.Error(transErr.Err, transErr.Lines)
 		return
 	}
 	log.D("code: %v, message: %v", code, util.S2Json(message))

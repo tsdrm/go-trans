@@ -33,3 +33,9 @@ type TransMessage struct {
 type InputFile struct {
 	Cdn string `json:"cdn"`
 }
+
+// Error of transcoding.
+type Error struct {
+	Err   error    // error message returned from process. eg. exit status 1
+	Lines []string // output message from stderr.
+}

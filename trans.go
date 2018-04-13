@@ -26,8 +26,8 @@ type TransPlugin interface {
 	// TransMessage: The output information of the transcoding,
 	// 		including the printing information of the transcoding success
 	// 		and the failure of the transcoding.
-	// error: NewError information of the system.
-	Exec(input, output string, args map[string]string) (int, TransMessage, error)
+	// Error: NewError information of the system.
+	Exec(input, output string, args util.Map) (int, TransMessage, Error)
 
 	// Cancel the current transcoding task.
 	// error: error message.
