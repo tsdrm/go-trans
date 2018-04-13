@@ -37,7 +37,7 @@ type TransPlugin interface {
 	//
 	// map[string]interface{}:
 	// error: error message.
-	Progress() (map[string]interface{}, error)
+	Progress() (util.Map, error)
 
 	// Pid return the system pid of the process. It return -1 if command is nil.
 	Pid() int
@@ -76,9 +76,10 @@ type TransManage struct {
 	lock *sync.Mutex
 }
 
-// The default number of transcoding threads
+// The default number of transcoding threads.
 var DefaultMaxRunningNum = 1
 
+// Failure retry number of message callback.
 var DefaultTryTimes = 1
 var DefaultFormats = []string{"flv"}
 
@@ -276,8 +277,35 @@ func (tm *TransManage) popTask(taskId string) error {
 //
 // []Task: Tasks' detail.
 // int: The count of all tasks.
-func (tm *TransManage) ListTask(limit, skip int) ([]Task, int) {
-	return nil, 0
+func (tm *TransManage) ListTask(page, pageCount int) ([]Task, int) {
+	tm.lock.Lock()
+	defer tm.lock.Unlock()
+	var tasks = []Task{}
+	var length = len(tm.Tasks)
+	if length < 1 {
+		return []Task{}, length
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageCount < 1 {
+		pageCount = 15
+	}
+
+	var beg, end int
+	if (page-1)*pageCount > length {
+		return []Task{}, length
+	}
+	beg = (page - 1) * pageCount
+	end = beg + pageCount
+	if end > length {
+		end = length
+	}
+	var taskPoints = tm.Tasks[beg:end]
+	for _, task := range taskPoints {
+		tasks = append(tasks, *task)
+	}
+	return tasks, length
 }
 
 // Cancel the transcoding process by taskId.
