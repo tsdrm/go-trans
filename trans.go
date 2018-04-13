@@ -215,16 +215,16 @@ func (tm *TransManage) runTask() {
 
 func (tm *TransManage) exec(task *Task) {
 	task.Status = TransRunning
-	code, result, err1 := task.Plugin.Exec(task.Input, task.Output, task.Args)
+	code, result, transError := task.Plugin.Exec(task.Input, task.Output, task.Args)
 	call := Call{
 		Code:         code,
 		Error:        ErrorCode[code],
-		ErrorMessage: err1,
+		ErrorMessage: transError,
 		Task:         *task,
 		Message:      result,
 	}
-	if err1 != nil {
-		log.E("TransManage exec task: %v complete with code %v, err %v", util.S2Json(task), code, err1)
+	if transError.Err != nil {
+		log.E("TransManage exec task: %v complete with code %v, err %v", util.S2Json(task), code, transError.Err)
 		task.Status = TransError
 	} else {
 		log.D("TransManage exec task: %v complete with result: %v", util.S2Json(task), util.S2Json(result))
