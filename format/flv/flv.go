@@ -159,6 +159,6 @@ func (flv *Flv) Cancel() error {
 	return flv.Cmd.Process.Kill()
 }
 
-func (flv *Flv) Progress() (map[string]interface{}, error) {
+func (flv *Flv) Progress() (util.Map, error) {
 	return nil, nil
 }

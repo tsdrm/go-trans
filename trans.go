@@ -125,6 +125,23 @@ func GetFormats() []string {
 	return DefaultTransManager.GetFormats()
 }
 
+// SetFormats set the support formats duration in DefaultFormats.
+func SetFormats(formats []string) error{
+	return DefaultTransManager.SetFormats(formats)
+}
+func (tm *TransManage) SetFormats(formats []string) error {
+	var formatMark = map[string]bool
+	for _, format := range DefaultFormats{
+		formatMark[format] = true
+	}
+	for _, format := range formats{
+		if !formatMark[formats]{
+		return util.NewError("invalid format: %s", format)
+		}
+	}
+	return nil
+}
+
 // SetMaxRunningNum set the maximum number of transcoding threads.This method
 // is called if the call needs to be executed before method TransManage.Run().
 func (tm *TransManage) SetMaxRunningNum(num int) {
