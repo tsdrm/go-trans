@@ -202,8 +202,10 @@ func (tm *TransManage) runTask() {
 		}
 	}()
 
+	log.D("TransManage really running...")
 	for {
 		<-tm.sign
+		log.D("TransManage has received a new task, currentRunning: %v", tm.CurrentRunning)
 		if tm.CurrentRunning >= tm.MaxRunningNum {
 			continue
 		}
@@ -236,9 +238,9 @@ func (tm *TransManage) exec(task *Task) {
 	}
 	err2 := tm.CallBack(call)
 	if err2 != nil {
-		log.E("TransManage exec task: %v complete but error with callback: %v, error: %v", util.S2Json(task), util.S2Json(call), err2)
+		log.E("TransManage exec task: %v complete but error with callback: %v, error: %v, currentRunning: %v", util.S2Json(task), util.S2Json(call), err2, tm.CurrentRunning)
 	} else {
-		log.D("TransManage exec task: %v complete and callback success")
+		log.D("TransManage exec task: %v complete and callback success, currentRunning: %v", util.S2Json(task), tm.CurrentRunning)
 	}
 	tm.sign <- 1
 
@@ -318,6 +320,9 @@ func (tm *TransManage) ListTask(page, pageCount int) ([]Task, int) {
 // Cancel the transcoding process by taskId.
 // It will return error TransNotFound if can't find task.
 // todo. If exec Callback here?
+func Cancel(taskId string) error {
+	return DefaultTransManager.Cancel(taskId)
+}
 func (tm *TransManage) Cancel(taskId string) error {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()

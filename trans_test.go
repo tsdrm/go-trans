@@ -1,9 +1,12 @@
 package go_trans
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/tangs-drm/go-trans/log"
 	"github.com/tangs-drm/go-trans/util"
-	"net/http/httptest"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -15,16 +18,15 @@ func init() {
 	})
 
 	// create callback server
-	httptest.NewRecorder()
-	server := httptest.NewServer(nil)
-	server.Start()
 }
 
 // create mock plugin
 const TYPE_MOCKPLUGIN string = ".MOCKPLUGIN"
 
+var isMockError bool
+var MockError = util.NewError("%v", "Mock Error")
+
 type MockPlugin struct {
-	MockError bool
 }
 
 func (mp *MockPlugin) Type() string {
@@ -43,16 +45,17 @@ func (mp *MockPlugin) Exec(input, output string, args util.Map) (int, TransMessa
 		CreationTime: util.Now13(),
 		Duration:     10.32,
 	}
-	if mp.MockError {
+	if isMockError {
 		return TransCommandError, message, Error{Err: util.NewError("%s", "Mock Error")}
 	}
+	log.D("MockPlugin start exec and will complete after 5 seconds.")
 	time.Sleep(5 * time.Second)
 	return TransOk, message, Error{}
 }
 
 func (mp *MockPlugin) Cancel() error {
-	if mp.MockError {
-		return util.NewError("%s", "Mock Error")
+	if isMockError {
+		return util.NewError("%s")
 	}
 	return nil
 }
@@ -62,11 +65,47 @@ func (mp *MockPlugin) Progress() (util.Map, error) {
 }
 
 func (mp *MockPlugin) Pid() int {
-	if mp.MockError {
+	if isMockError {
 		return -1
 	}
 	return 1
 }
+
+var callBackResult util.Map
+var CallbackSuccess = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "success")
+	bys, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.E("CallbackSuccess fail")
+		callBackResult = nil
+		return
+	}
+	defer r.Body.Close()
+	err = json.Unmarshal(bys, &callBackResult)
+	if err != nil {
+		log.E("CallbackSuccess unmarshal data: %v error: %v", string(bys), err)
+		callBackResult = nil
+		return
+	}
+	log.D("CallbackSuccess success")
+})
+var CallbackFail = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	defer w.WriteHeader(http.StatusNotFound)
+	bys, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.E("CallbackFail fail")
+		callBackResult = nil
+		return
+	}
+	defer r.Body.Close()
+	err = json.Unmarshal(bys, &callBackResult)
+	if err != nil {
+		log.E("CallbackFail unmarshal data: %v error: %v", string(bys), err)
+		callBackResult = nil
+		return
+	}
+	log.D("CallbackFail not found")
+})
 
 func TestTransManage(t *testing.T) {
 	// test formats
@@ -84,13 +123,13 @@ func TestTransManage(t *testing.T) {
 
 	var tasks []Task
 	var task Task
-	var num int
+	var count int
 	var err error
 	var args util.Map
 	// list tasks
-	tasks, num = ListTask(-1, 2)
-	if num != 0 || len(tasks) != 0 {
-		t.Error(num, tasks)
+	tasks, count = ListTask(-1, 2)
+	if count != 0 || len(tasks) != 0 {
+		t.Error(count, tasks)
 		return
 	}
 
@@ -112,6 +151,13 @@ func TestTransManage(t *testing.T) {
 		return
 	}
 
+	// list tasks
+	tasks, count = ListTask(-1, 2)
+	if count != 0 || len(tasks) != 0 {
+		t.Error(count, tasks)
+		return
+	}
+
 	// start task exec runner
 	RunTask()
 
@@ -126,5 +172,79 @@ func TestTransManage(t *testing.T) {
 		t.Error(util.S2Json(task))
 		return
 	}
-	time.Sleep(time.Second)
+	tasks, count = ListTask(-1, 2)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	// check
+	log.D("tasks %v, count: %v", util.S2Json(tasks), count)
+	if count != 1 || len(tasks) != 1 {
+		t.Error(util.S2Json(tasks), count)
+		return
+	}
+	if tasks[0].Id != task.Id {
+		t.Error(util.S2Json(tasks), util.S2Json(task))
+		return
+	}
+	if tasks[0].Status != TransRunning {
+		t.Error(util.S2Json(tasks[0]))
+		return
+	}
+
+	time.Sleep(6 * time.Second)
+
+	// list empty
+	tasks, count = ListTask(1, 10)
+	if count != 0 || len(tasks) != 0 {
+		t.Error(util.S2Json(tasks), count)
+		return
+	}
+
+	// test cancel task success
+	{
+		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		err = Cancel(task.Id)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		// check
+		tasks, count = ListTask(1, 10)
+		if count != 0 || len(tasks) != 0 {
+			t.Error(count, util.S2Json(tasks))
+			return
+		}
+	}
+	// test cancel task error
+	{
+		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(time.Second)
+		isMockError = true
+		err = Cancel(task.Id)
+		if err == nil || err.Error() != MockError.Error() {
+			t.Error(err)
+			return
+		}
+		isMockError = false
+		// check
+		tasks, count = ListTask(1, 10)
+		if count != 0 || len(tasks) != 0 {
+			t.Error(count, util.S2Json(tasks))
+			return
+		}
+	}
+
+	// setCallback
+	//ts := httptest.NewServer(CallbackFail)
+	//SetCallbackAddress(ts.URL)
+
 }
