@@ -81,13 +81,12 @@ var DefaultMaxRunningNum = 1
 
 // Failure retry number of message callback.
 var DefaultTryTimes = 1
-var DefaultFormats = []string{"flv"}
 
 // The default trans manager.
 var DefaultTransManager = &TransManage{
 	MaxRunningNum:  DefaultMaxRunningNum,
 	CurrentRunning: 0,
-	Formats:        DefaultFormats,
+	Formats:        []string{},
 	TransPlugin:    map[string]func() TransPlugin{},
 	Tasks:          []*Task{},
 	TryTimes:       DefaultTryTimes,
@@ -125,23 +124,6 @@ func GetFormats() []string {
 	return DefaultTransManager.GetFormats()
 }
 
-// SetFormats set the support formats duration in DefaultFormats.
-func SetFormats(formats []string) error{
-	return DefaultTransManager.SetFormats(formats)
-}
-func (tm *TransManage) SetFormats(formats []string) error {
-	var formatMark = map[string]bool
-	for _, format := range DefaultFormats{
-		formatMark[format] = true
-	}
-	for _, format := range formats{
-		if !formatMark[formats]{
-		return util.NewError("invalid format: %s", format)
-		}
-	}
-	return nil
-}
-
 // SetMaxRunningNum set the maximum number of transcoding threads.This method
 // is called if the call needs to be executed before method TransManage.Run().
 func (tm *TransManage) SetMaxRunningNum(num int) {
@@ -166,7 +148,10 @@ func (tm *TransManage) SetCallbackAddress(addr string) {
 //
 // input: Input filename.
 // output: Output filename.
-func (tm *TransManage) AddTask(input, output string) (Task, error) {
+func AddTask(input, output string, args util.Map) (Task, error) {
+	return DefaultTransManager.AddTask(input, output, args)
+}
+func (tm *TransManage) AddTask(input, output string, args util.Map) (Task, error) {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
 
@@ -195,6 +180,7 @@ func (tm *TransManage) AddTask(input, output string) (Task, error) {
 		Id:     util.UUID(),
 		Input:  input,
 		Output: output,
+		Status: TransNotStart,
 		Plugin: plugin(),
 	}
 
@@ -294,6 +280,10 @@ func (tm *TransManage) popTask(taskId string) error {
 //
 // []Task: Tasks' detail.
 // int: The count of all tasks.
+func ListTask(page, pageCount int) ([]Task, int) {
+	return DefaultTransManager.ListTask(page, pageCount)
+}
+
 func (tm *TransManage) ListTask(page, pageCount int) ([]Task, int) {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
