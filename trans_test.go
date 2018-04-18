@@ -63,10 +63,10 @@ func (mp *MockPlugin) Exec(input, output string, args util.Map) (int, TransMessa
 
 func (mp *MockPlugin) Cancel() error {
 	log.D("MockPlugin cancel start with mock: %v", isMockError)
-	if isMockError {
-		return util.NewError("%v", MockError)
-	}
 	isCancel = true
+	if isMockError {
+		return MockError
+	}
 	return nil
 }
 
