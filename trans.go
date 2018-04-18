@@ -80,7 +80,7 @@ type TransManage struct {
 var DefaultMaxRunningNum = 1
 
 // Failure retry number of message callback.
-var DefaultTryTimes = 1
+var DefaultTryTimes = 3
 
 // The default trans manager.
 var DefaultTransManager = &TransManage{
@@ -222,13 +222,6 @@ func (tm *TransManage) runTask() {
 func (tm *TransManage) exec(task *Task) {
 	task.Status = TransRunning
 	code, result, transError := task.Plugin.Exec(task.Input, task.Output, task.Args)
-	call := Call{
-		Code:         code,
-		Error:        ErrorCode[code],
-		ErrorMessage: transError,
-		Task:         *task,
-		Message:      result,
-	}
 	if transError.Err != nil {
 		log.E("TransManage exec task: %v complete with code %v, err %v", util.S2Json(task), code, transError.Err)
 		task.Status = TransError
@@ -236,12 +229,21 @@ func (tm *TransManage) exec(task *Task) {
 		log.D("TransManage exec task: %v complete with result: %v", util.S2Json(task), util.S2Json(result))
 		task.Status = TransSuccess
 	}
+	call := Call{
+		Code:         code,
+		Error:        ErrorCode[code],
+		ErrorMessage: transError,
+		Task:         *task,
+		Message:      result,
+	}
+
 	err2 := tm.CallBack(call)
 	if err2 != nil {
 		log.E("TransManage exec task: %v complete but error with callback: %v, error: %v, currentRunning: %v", util.S2Json(task), util.S2Json(call), err2, tm.CurrentRunning)
 	} else {
 		log.D("TransManage exec task: %v complete and callback success, currentRunning: %v", util.S2Json(task), tm.CurrentRunning)
 	}
+	log.D("will call: %v", util.S2Json(call))
 	tm.sign <- 1
 
 	tm.lock.Lock()
@@ -354,7 +356,7 @@ func (tm *TransManage) CallBack(call Call) error {
 	}
 
 	for i := 0; i < tm.TryTimes; i++ {
-		resp, err := http.Post(tm.Address, "application/json", strings.NewReader(util.S2Json(call)))
+		resp, err := http.Post(tm.Address, "application/json", strings.NewReader(call.ToString()))
 		if err != nil {
 			log.W("CallBack with retryTime: %v, address: %v, call: %v error: %v", i, tm.Address, util.S2Json(call), err)
 			duration := time.Duration(rand.Intn(10)+10) * time.Second
@@ -363,11 +365,15 @@ func (tm *TransManage) CallBack(call Call) error {
 		}
 		if http.StatusOK != resp.StatusCode {
 			log.W("CallBack with retryTime: %v, address: %v, call: %v code: %v", i, tm.Address, util.S2Json(call), resp.StatusCode)
-			duration := time.Duration(rand.Intn(10)+10) * time.Second
+			duration := time.Duration(rand.Intn(10)+1) * time.Second
 			time.Sleep(duration)
 			continue
 		}
-		log.W("CallBack with retryTime: %v, address: %v, call: %v success", i, tm.Address, util.S2Json(call))
+		var statusCode int
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
+		log.W("CallBack with retryTime: %v, address: %v, statusCode: %v, call: %v success", i, tm.Address, statusCode, util.S2Json(call))
 		return nil
 	}
 	return util.NewError("%v", TransTooManyTimes)

@@ -6,7 +6,9 @@ import (
 	"github.com/tangs-drm/go-trans/log"
 	"github.com/tangs-drm/go-trans/util"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +26,7 @@ func init() {
 const TYPE_MOCKPLUGIN string = ".MOCKPLUGIN"
 
 var isMockError bool
+var isCancel bool
 var MockError = util.NewError("%v", "Mock Error")
 
 type MockPlugin struct {
@@ -46,17 +49,24 @@ func (mp *MockPlugin) Exec(input, output string, args util.Map) (int, TransMessa
 		Duration:     10.32,
 	}
 	if isMockError {
-		return TransCommandError, message, Error{Err: util.NewError("%s", "Mock Error")}
+		return TransCommandError, message, Error{Err: MockError}
 	}
-	log.D("MockPlugin start exec and will complete after 5 seconds.")
+	log.D("MockPlugin start exec with isCancel: %v and will complete after 5 seconds.", isCancel)
 	time.Sleep(5 * time.Second)
+	log.D("MockPlugin start exec with isCancel: %v and will return", isCancel)
+	if isCancel {
+		isCancel = false
+		return TransSystemError, message, Error{Err: util.NewError("already cancel")}
+	}
 	return TransOk, message, Error{}
 }
 
 func (mp *MockPlugin) Cancel() error {
+	log.D("MockPlugin cancel start with mock: %v", isMockError)
 	if isMockError {
-		return util.NewError("%s")
+		return util.NewError("%v", MockError)
 	}
+	isCancel = true
 	return nil
 }
 
@@ -65,6 +75,7 @@ func (mp *MockPlugin) Progress() (util.Map, error) {
 }
 
 func (mp *MockPlugin) Pid() int {
+	log.D("MockPlugin pid with mock: %v", isMockError)
 	if isMockError {
 		return -1
 	}
@@ -72,36 +83,39 @@ func (mp *MockPlugin) Pid() int {
 }
 
 var callBackResult util.Map
+var callBackCount int
 var CallbackSuccess = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "success")
+	callBackCount++
 	bys, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.E("CallbackSuccess fail")
-		callBackResult = nil
+		callBackResult = util.Map{}
 		return
 	}
 	defer r.Body.Close()
 	err = json.Unmarshal(bys, &callBackResult)
 	if err != nil {
 		log.E("CallbackSuccess unmarshal data: %v error: %v", string(bys), err)
-		callBackResult = nil
+		callBackResult = util.Map{}
 		return
 	}
 	log.D("CallbackSuccess success")
 })
 var CallbackFail = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	defer w.WriteHeader(http.StatusNotFound)
+	callBackCount++
 	bys, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.E("CallbackFail fail")
-		callBackResult = nil
+		callBackResult = util.Map{}
 		return
 	}
 	defer r.Body.Close()
 	err = json.Unmarshal(bys, &callBackResult)
 	if err != nil {
 		log.E("CallbackFail unmarshal data: %v error: %v", string(bys), err)
-		callBackResult = nil
+		callBackResult = util.Map{}
 		return
 	}
 	log.D("CallbackFail not found")
@@ -120,6 +134,7 @@ func TestTransManage(t *testing.T) {
 		t.Error(DefaultTransManager.MaxRunningNum)
 		return
 	}
+	var ts *httptest.Server
 
 	var tasks []Task
 	var task Task
@@ -172,6 +187,8 @@ func TestTransManage(t *testing.T) {
 		t.Error(util.S2Json(task))
 		return
 	}
+
+	time.Sleep(2 * time.Second)
 	tasks, count = ListTask(-1, 2)
 	if err != nil {
 		t.Error(err)
@@ -213,6 +230,7 @@ func TestTransManage(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		isCancel = false
 		// check
 		tasks, count = ListTask(1, 10)
 		if count != 0 || len(tasks) != 0 {
@@ -220,9 +238,66 @@ func TestTransManage(t *testing.T) {
 			return
 		}
 	}
+
+	{
+
+		// test callback success
+		ts = httptest.NewServer(CallbackSuccess)
+		SetCallbackAddress(ts.URL)
+		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(6 * time.Second)
+		log.D("callbackResult: %v", util.S2Json(callBackResult))
+		if callBackResult.Int("code") != 0 || callBackResult.Map("task").String("id") != task.Id {
+			t.Error(util.S2Json(callBackResult), util.S2Json(task))
+			return
+		}
+
+		// test callback success and trans error
+		isMockError = true
+		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(6 * time.Second)
+		isMockError = false
+		if callBackResult.Int("code") != TransCommandError || callBackResult.Map("task").String("id") != task.Id {
+			t.Error(util.S2Json(callBackResult), util.S2Json(task))
+			return
+		}
+
+		// test callback fail
+		callBackCount = 0
+		ts = httptest.NewServer(CallbackFail)
+		SetCallbackAddress(ts.URL)
+		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(30 * time.Second) // because of callback retry.
+		if callBackCount != 3 {
+			t.Error(callBackCount)
+			return
+		}
+		if callBackResult.Int("code") != 0 || callBackResult.Map("task").String("id") != task.Id {
+			t.Error(util.S2Json(callBackResult))
+			return
+		}
+		time.Sleep(time.Second)
+	}
+
 	// test cancel task error
 	{
-		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		ts = httptest.NewServer(CallbackSuccess)
+		SetCallbackAddress(ts.URL)
+
+		callBackCount = 0
+		task, err = AddTask("mockInput2222"+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
@@ -237,14 +312,85 @@ func TestTransManage(t *testing.T) {
 		isMockError = false
 		// check
 		tasks, count = ListTask(1, 10)
+		if count != 1 || len(tasks) != 1 {
+			t.Error(count, util.S2Json(tasks))
+			return
+		}
+		if tasks[0].Status != TransRunning {
+			t.Error(util.S2Json(tasks[0]))
+			return
+		}
+		task = tasks[0]
+
+		time.Sleep(6 * time.Second)
+		tasks, count = ListTask(1, 10)
 		if count != 0 || len(tasks) != 0 {
 			t.Error(count, util.S2Json(tasks))
 			return
 		}
+		if callBackCount != 1 {
+			t.Error(callBackCount)
+			return
+		}
+		if callBackResult.Int("code") != TransSystemError || callBackResult.Map("task").String("id") != task.Id {
+			t.Error(util.S2Json(callBackResult))
+			return
+		}
 	}
 
-	// setCallback
-	//ts := httptest.NewServer(CallbackFail)
-	//SetCallbackAddress(ts.URL)
+}
+
+func TestCancel(t *testing.T) {
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
+	log.D("%d", rand.Intn(10))
 
 }

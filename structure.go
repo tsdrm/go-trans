@@ -23,6 +23,23 @@ type Call struct {
 	Message      TransMessage `json:"message"`
 }
 
+func (call Call) ToString() string {
+	var errorMessage = util.Map{}
+	if call.ErrorMessage.Err != nil {
+		errorMessage = util.Map{
+			"err":   call.ErrorMessage.Err.Error(),
+			"lines": call.ErrorMessage.Lines,
+		}
+	}
+	var errorMessageMap util.Map
+	err := util.Json2S(util.S2Json(call), &errorMessageMap)
+	if err != nil {
+		return ""
+	}
+	errorMessageMap["errorMessage"] = errorMessage
+	return util.S2Json(errorMessageMap)
+}
+
 type TransMessage struct {
 	Input        InputFile `json:"input"`        // input info
 	Size         int       `json:"size"`         // input file size
@@ -38,6 +55,6 @@ type InputFile struct {
 
 // Error of transcoding.
 type Error struct {
-	Err   error    // error message returned from process. eg. exit status 1
-	Lines []string // output message from stderr.
+	Err   error    `json:"err"`   // error message returned from process. eg. exit status 1
+	Lines []string `json:"lines"` // output message from stderr.
 }
