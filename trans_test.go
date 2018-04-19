@@ -6,7 +6,6 @@ import (
 	"github.com/tangs-drm/go-trans/log"
 	"github.com/tangs-drm/go-trans/util"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -142,7 +141,7 @@ func TestTransManage(t *testing.T) {
 	var err error
 	var args util.Map
 	// list tasks
-	tasks, count = ListTask(-1, 2)
+	tasks, count = ListTask(-1, -1)
 	if count != 0 || len(tasks) != 0 {
 		t.Error(count, tasks)
 		return
@@ -189,6 +188,14 @@ func TestTransManage(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Second)
+	// list tasks empty
+	tasks, count = ListTask(5, 15)
+	if count != 1 || len(tasks) != 0 {
+		t.Error(count, util.S2Json(tasks))
+		return
+	}
+
+	// list tasks normal
 	tasks, count = ListTask(-1, 2)
 	if err != nil {
 		t.Error(err)
@@ -289,6 +296,20 @@ func TestTransManage(t *testing.T) {
 			return
 		}
 		time.Sleep(time.Second)
+
+		// test callback with invalid callback address.
+		SetCallbackAddress("invalidUrl")
+		task, err = AddTask("mockInput"+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(33 * time.Second)
+		tasks, count = ListTask(1, -1)
+		if count != 0 || len(tasks) != 0 {
+			t.Error(count, util.S2Json(tasks))
+			return
+		}
 	}
 
 	// test cancel task error
@@ -336,61 +357,32 @@ func TestTransManage(t *testing.T) {
 			t.Error(util.S2Json(callBackResult))
 			return
 		}
+
+		// test cancel and not found
+		err = Cancel("taskId")
+		if err == nil || err.Error() != ErrorCode[TransNotFound] {
+			t.Error(err)
+			return
+		}
 	}
 
-}
+	// register plugin again
+	RegisterPlugin(TYPE_MOCKPLUGIN, func() TransPlugin {
+		return &MockPlugin{}
+	})
+	if len(DefaultTransManager.Formats) != 1 || len(DefaultTransManager.TransPlugin) != 1 {
+		t.Error(DefaultTransManager.Formats)
+		return
+	}
+	if DefaultTransManager.Formats[0] != TYPE_MOCKPLUGIN {
+		t.Error(DefaultTransManager.Formats[0])
+		return
+	}
+	if _, ok := DefaultTransManager.TransPlugin[TYPE_MOCKPLUGIN]; !ok {
+		t.Error("key")
+		return
+	}
 
-func TestCancel(t *testing.T) {
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-	log.D("%d", rand.Intn(10))
-
+	// process
+	Process(nil)
 }

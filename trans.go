@@ -342,10 +342,14 @@ func (tm *TransManage) Cancel(taskId string) error {
 		tm.popTask(taskId)
 		return nil
 	}
-	return util.NewError("%v", TransNotFound)
+	return util.NewError("%v", ErrorCode[TransNotFound])
 }
 
-func (tm *TransManage) Process(id []string) {
+func Process(ids []string) {
+	DefaultTransManager.Process(ids)
+}
+
+func (tm *TransManage) Process(ids []string) {
 
 }
 
@@ -358,14 +362,14 @@ func (tm *TransManage) CallBack(call Call) error {
 	for i := 0; i < tm.TryTimes; i++ {
 		resp, err := http.Post(tm.Address, "application/json", strings.NewReader(call.ToString()))
 		if err != nil {
-			log.W("CallBack with retryTime: %v, address: %v, call: %v error: %v", i, tm.Address, util.S2Json(call), err)
-			duration := time.Duration(rand.Intn(10)+10) * time.Second
+			duration := time.Duration(rand.Intn(10)+1) * time.Second
+			log.W("CallBack with retryTime: %v, address: %v, call: %v error: %v, rest: %v", i, tm.Address, util.S2Json(call), err, duration)
 			time.Sleep(duration)
 			continue
 		}
 		if http.StatusOK != resp.StatusCode {
-			log.W("CallBack with retryTime: %v, address: %v, call: %v code: %v", i, tm.Address, util.S2Json(call), resp.StatusCode)
 			duration := time.Duration(rand.Intn(10)+1) * time.Second
+			log.W("CallBack with retryTime: %v, address: %v, call: %v code: %v, rest %v", i, tm.Address, util.S2Json(call), resp.StatusCode, duration)
 			time.Sleep(duration)
 			continue
 		}
