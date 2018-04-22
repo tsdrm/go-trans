@@ -109,6 +109,7 @@ func (flv *Flv) Exec(input, output string, args util.Map) (int, go_trans.TransMe
 		log.E("TYPE_FLV command ffprobe with input: %v error: %v", input, err)
 		return go_trans.TransCommandError, go_trans.TransMessage{}, go_trans.Error{Err: err}
 	}
+
 	var cmdFormat = util.Map{}
 	err = util.Json2S(cmdOutput, &cmdFormat)
 	if err != nil {

@@ -214,6 +214,7 @@ func (tm *TransManage) runTask() {
 			if TASK_WAITING == task.Status {
 				continue
 			}
+			log.D("TransManage will start a new task with id: %v, currentRunning: %v", task.Id, tm.CurrentRunning)
 			go tm.exec(task)
 		}
 	}

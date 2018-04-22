@@ -7,13 +7,15 @@ import (
 	"github.com/tsdrm/go-trans/util"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"strconv"
 )
 
 type RemoteTask struct {
-	Input string   `json:"input"`
-	Path  string   `json:"path"`
-	Args  util.Map `json:"args"`
+	Input  string   `json:"input"`
+	Path   string   `json:"path"`
+	Format string   `json:"format"`
+	Args   util.Map `json:"args"`
 }
 
 type Response struct {
@@ -51,15 +53,16 @@ func AddTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//
-	if rt.Input == "" {
-		err = util.NewError("input is invalid")
+	if rt.Input == "" || rt.Format == "" {
+		err = util.NewError("input/format is invalid")
 		log.E("[AddTask] Received task: %v error: %v", util.S2Json(rt), err)
 		resp.Code, resp.Error = go_trans.HTTPRequestParamsError, go_trans.ErrorCode[go_trans.HTTPRequestParamsError]
 		resp.Message = err.Error()
 		return
 	}
 
-	code, task, err := go_trans.AddTask(rt.Input, rt.Path, rt.Args)
+	var newName = util.UUID() + rt.Format
+	code, task, err := go_trans.AddTask(filepath.Join(rt.Path, rt.Input), newName, rt.Args)
 	if err != nil {
 		log.E("[AddTask] Add task with RemoteTask: %v error: %v", util.S2Json(rt), err)
 		resp.Code, resp.Error = code, go_trans.ErrorCode[code]
@@ -107,7 +110,7 @@ func ListTasks(w http.ResponseWriter, r *http.Request) {
 	resp.Data["tasks"] = tasks
 	resp.Data["count"] = count
 
-	log.D("[ListTasks] ListTasks list with page: %v, pageCount: %v success with length, count: %v", page, pageCount, len(tasks), count)
+	log.D("[ListTasks] ListTasks list with page: %v, pageCount: %v success with length: %v, count: %v", page, pageCount, len(tasks), count)
 }
 
 func Cancel(w http.ResponseWriter, r *http.Request) {
