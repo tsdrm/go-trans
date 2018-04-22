@@ -91,7 +91,7 @@ func (flv *Flv) _Exec(input, output string, args util.Map) (int, go_trans.TransM
 	}
 	log.D("TYPE_FLV command with input: %v, output: %v, params: %v success with message: %v", input, output, params, util.S2Json(message))
 
-	return go_trans.TransOk, message, go_trans.Error{}
+	return go_trans.StatusOk, message, go_trans.Error{}
 }
 
 func (flv *Flv) Exec(input, output string, args util.Map) (int, go_trans.TransMessage, go_trans.Error) {
@@ -141,7 +141,7 @@ func (flv *Flv) Exec(input, output string, args util.Map) (int, go_trans.TransMe
 	}
 	log.D("TYPE_FLV command with input: %v, output: %v, params: %v success with message: %v", input, output, params, util.S2Json(message))
 
-	return go_trans.TransOk, message, go_trans.Error{}
+	return go_trans.StatusOk, message, go_trans.Error{}
 }
 
 func (flv *Flv) Pid() int {

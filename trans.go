@@ -148,10 +148,10 @@ func (tm *TransManage) SetCallbackAddress(addr string) {
 //
 // input: Input filename.
 // output: Output filename.
-func AddTask(input, output string, args util.Map) (Task, error) {
+func AddTask(input, output string, args util.Map) (int, Task, error) {
 	return DefaultTransManager.AddTask(input, output, args)
 }
-func (tm *TransManage) AddTask(input, output string, args util.Map) (Task, error) {
+func (tm *TransManage) AddTask(input, output string, args util.Map) (int, Task, error) {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
 
@@ -163,18 +163,18 @@ func (tm *TransManage) AddTask(input, output string, args util.Map) (Task, error
 	if "" == inputExt {
 		err = util.NewError("input is invalid: %v", input)
 		log.E("AddTask error with input: %v", err)
-		return Task{}, err
+		return TransParamsError, Task{}, err
 	}
 	if "" == outputExt {
 		err = util.NewError("output is invalid: %v", output)
 		log.E("AddTask error with output: %v", err)
-		return Task{}, err
+		return TransParamsError, Task{}, err
 	}
 	var plugin = tm.TransPlugin[inputExt]
 	if plugin == nil {
 		err = util.NewError("unsupported format: %v", inputExt)
 		log.E("AddTask error with format: %v", err)
-		return Task{}, err
+		return TransParamsError, Task{}, err
 	}
 	var task = &Task{
 		Id:     util.UUID(),
@@ -189,7 +189,7 @@ func (tm *TransManage) AddTask(input, output string, args util.Map) (Task, error
 
 	tm.sign <- 1
 
-	return *task, nil
+	return StatusOk, *task, nil
 }
 
 func RunTask() {
@@ -322,10 +322,10 @@ func (tm *TransManage) ListTask(page, pageCount int) ([]Task, int) {
 // Cancel the transcoding process by taskId.
 // It will return error TransNotFound if can't find task.
 // todo. If exec Callback here?
-func Cancel(taskId string) error {
+func Cancel(taskId string) (int, error) {
 	return DefaultTransManager.Cancel(taskId)
 }
-func (tm *TransManage) Cancel(taskId string) error {
+func (tm *TransManage) Cancel(taskId string) (int, error) {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
 
@@ -336,13 +336,13 @@ func (tm *TransManage) Cancel(taskId string) error {
 
 		var err = task.Plugin.Cancel()
 		if err != nil {
-			return err
+			return TransCommandError, err
 		}
 		task.Status = TransCancel
 		tm.popTask(taskId)
-		return nil
+		return StatusOk, nil
 	}
-	return util.NewError("%v", ErrorCode[TransNotFound])
+	return TransNotFound, util.NewError("%v", ErrorCode[TransNotFound])
 }
 
 func Process(ids []string) {

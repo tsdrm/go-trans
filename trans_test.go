@@ -57,7 +57,7 @@ func (mp *MockPlugin) Exec(input, output string, args util.Map) (int, TransMessa
 		isCancel = false
 		return TransSystemError, message, Error{Err: util.NewError("already cancel")}
 	}
-	return TransOk, message, Error{}
+	return StatusOk, message, Error{}
 }
 
 func (mp *MockPlugin) Cancel() error {
@@ -148,18 +148,18 @@ func TestTransManage(t *testing.T) {
 	}
 
 	// add task; invalid input
-	task, err = AddTask("mockInput", "mockOutput.mp4", args)
+	_, task, err = AddTask("mockInput", "mockOutput.mp4", args)
 	if err == nil || !strings.Contains(err.Error(), "input is invalid") {
 		t.Error(err)
 		return
 	}
-	task, err = AddTask("mockInput.flv", "mockOutput.mp4", args)
+	_, task, err = AddTask("mockInput.flv", "mockOutput.mp4", args)
 	if err == nil || !strings.Contains(err.Error(), "unsupported format") {
 		t.Error(err)
 		return
 	}
 	// add task; invalid output
-	task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput", args)
+	_, task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput", args)
 	if err == nil || !strings.Contains(err.Error(), "output is invalid") {
 		t.Error(err)
 		return
@@ -176,7 +176,7 @@ func TestTransManage(t *testing.T) {
 	RunTask()
 
 	// add task; normal
-	task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+	_, task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 	if err != nil {
 		t.Error(err)
 		return
@@ -227,12 +227,12 @@ func TestTransManage(t *testing.T) {
 
 	// test cancel task success
 	{
-		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		_, task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		err = Cancel(task.Id)
+		_, err = Cancel(task.Id)
 		if err != nil {
 			t.Error(err)
 			return
@@ -251,7 +251,7 @@ func TestTransManage(t *testing.T) {
 		// test callback success
 		ts = httptest.NewServer(CallbackSuccess)
 		SetCallbackAddress(ts.URL)
-		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		_, task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
@@ -265,7 +265,7 @@ func TestTransManage(t *testing.T) {
 
 		// test callback success and trans error
 		isMockError = true
-		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		_, task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
@@ -281,7 +281,7 @@ func TestTransManage(t *testing.T) {
 		callBackCount = 0
 		ts = httptest.NewServer(CallbackFail)
 		SetCallbackAddress(ts.URL)
-		task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		_, task, err = AddTask("mockInput."+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
@@ -299,7 +299,7 @@ func TestTransManage(t *testing.T) {
 
 		// test callback with invalid callback address.
 		SetCallbackAddress("invalidUrl")
-		task, err = AddTask("mockInput"+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		_, task, err = AddTask("mockInput"+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
@@ -318,14 +318,14 @@ func TestTransManage(t *testing.T) {
 		SetCallbackAddress(ts.URL)
 
 		callBackCount = 0
-		task, err = AddTask("mockInput2222"+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
+		_, task, err = AddTask("mockInput2222"+TYPE_MOCKPLUGIN, "mockOutput.mp4", args)
 		if err != nil {
 			t.Error(err)
 			return
 		}
 		time.Sleep(time.Second)
 		isMockError = true
-		err = Cancel(task.Id)
+		_, err = Cancel(task.Id)
 		if err == nil || err.Error() != MockError.Error() {
 			t.Error(err)
 			return
@@ -359,7 +359,7 @@ func TestTransManage(t *testing.T) {
 		}
 
 		// test cancel and not found
-		err = Cancel("taskId")
+		_, err = Cancel("taskId")
 		if err == nil || err.Error() != ErrorCode[TransNotFound] {
 			t.Error(err)
 			return
