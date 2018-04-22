@@ -2,9 +2,9 @@ package flv
 
 import (
 	"bufio"
-	"github.com/tangs-drm/go-trans"
-	"github.com/tangs-drm/go-trans/log"
-	"github.com/tangs-drm/go-trans/util"
+	"github.com/tsdrm/go-trans"
+	"github.com/tsdrm/go-trans/log"
+	"github.com/tsdrm/go-trans/util"
 	"io"
 	"os/exec"
 )

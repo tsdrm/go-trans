@@ -1,7 +1,7 @@
 package util
 
 import (
-	"github.com/tangs-drm/go-trans/log"
+	"github.com/tsdrm/go-trans/log"
 	"testing"
 )
 

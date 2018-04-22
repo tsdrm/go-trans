@@ -1,6 +1,6 @@
 package go_trans
 
-import "github.com/tangs-drm/go-trans/util"
+import "github.com/tsdrm/go-trans/util"
 
 const TASK_RUNNING = "running"
 const TASK_WAITING = "waiting"

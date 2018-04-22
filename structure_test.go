@@ -2,7 +2,7 @@ package go_trans
 
 import (
 	"fmt"
-	"github.com/tangs-drm/go-trans/util"
+	"github.com/tsdrm/go-trans/util"
 	"strings"
 	"testing"
 )

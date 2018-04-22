@@ -2,8 +2,8 @@ package format
 
 import (
 	"fmt"
-	"github.com/tangs-drm/go-trans"
-	"github.com/tangs-drm/go-trans/format/flv"
+	"github.com/tsdrm/go-trans"
+	"github.com/tsdrm/go-trans/format/flv"
 	"testing"
 )
 
