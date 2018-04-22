@@ -56,3 +56,7 @@ func (c *Cmder) Command(name string, args ...string) (string, error) {
 
 	return output, err
 }
+
+func (c *Cmder) Kill() error {
+	return c.Cmd.Process.Kill()
+}
