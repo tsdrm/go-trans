@@ -90,7 +90,9 @@ func TestTask(t *testing.T) {
 		return
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
+	//time.Sleep(time.Hour)
+
 	// cancel task
 	result, err = HttpGet("/listTasks", "page=1&pageCount=10")
 	if err != nil {
@@ -122,8 +124,6 @@ func TestTask(t *testing.T) {
 		t.Error(util.S2Json(result))
 		return
 	}
-
-	time.Sleep(time.Hour)
 }
 
 func HttpGet(urlStr string, args string) (util.Map, error) {

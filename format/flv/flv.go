@@ -11,6 +11,7 @@ import (
 
 type Flv struct {
 	Cmd   *exec.Cmd
+	Cmder *util.Cmder
 	Lines []string
 }
 
@@ -103,8 +104,8 @@ func (flv *Flv) Exec(input, output string, args util.Map) (int, go_trans.TransMe
 	params = append(params, "-y", output)
 
 	// Get file info from ffprobe
-	var cmder = util.NewCmder()
-	var cmdOutput, err = cmder.Command("ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", input)
+	flv.Cmder = util.NewCmder()
+	var cmdOutput, err = flv.Cmder.Command("ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", input)
 	if err != nil {
 		log.E("TYPE_FLV command ffprobe with input: %v error: %v", input, err)
 		return go_trans.TransCommandError, go_trans.TransMessage{}, go_trans.Error{Err: err}
@@ -120,8 +121,8 @@ func (flv *Flv) Exec(input, output string, args util.Map) (int, go_trans.TransMe
 
 	// Start to exec transcoding task.
 	var beg, end int64 = util.Now13(), util.Now13()
-	cmder = util.NewCmder()
-	cmdOutput, err = cmder.Command("ffmpeg", params...)
+	flv.Cmder = util.NewCmder()
+	cmdOutput, err = flv.Cmder.Command("ffmpeg", params...)
 	if err != nil {
 		log.E("TYPE_FLV exec command with input: %v, output: %v, params: %v error: %v", input, output, params, err)
 		return go_trans.TransCommandError, go_trans.TransMessage{}, go_trans.Error{Err: err, Lines: []string{cmdOutput}}
@@ -153,11 +154,15 @@ func (flv *Flv) Pid() int {
 }
 
 func (flv *Flv) Cancel() error {
-	if flv.Cmd == nil {
+	if flv.Cmd == nil && flv.Cmder == nil {
 		return util.NewError("%v", go_trans.ErrorCode[go_trans.TransProcessNotExist])
 	}
 
-	return flv.Cmd.Process.Kill()
+	if flv.Cmd != nil {
+		return flv.Cmd.Process.Kill()
+	}
+
+	return flv.Cmder.Kill()
 }
 
 func (flv *Flv) Progress() (util.Map, error) {
