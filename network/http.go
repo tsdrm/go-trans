@@ -90,17 +90,11 @@ func ListTasks(w http.ResponseWriter, r *http.Request) {
 	var page, pageCount int
 	page, err = strconv.Atoi(r.FormValue("page"))
 	if err != nil {
-		log.E("[ListTasks] ListTasks received page error: %v", err)
-		resp.Code, resp.Error = go_trans.HTTPRequestParamsError, go_trans.ErrorCode[go_trans.HTTPRequestParamsError]
-		resp.Message = err.Error()
-		return
+		page = 1
 	}
 	pageCount, err = strconv.Atoi(r.FormValue("pageCount"))
 	if err != nil {
-		log.E("[ListTasks] ListTasks received pageCount error: %v", err)
-		resp.Code, resp.Error = go_trans.HTTPRequestParamsError, go_trans.ErrorCode[go_trans.HTTPRequestParamsError]
-		resp.Message = err.Error()
-		return
+		pageCount = 15
 	}
 
 	var tasks, count = go_trans.ListTask(page, pageCount)

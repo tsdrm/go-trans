@@ -1,13 +1,11 @@
 package network
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/tsdrm/go-trans"
 	"github.com/tsdrm/go-trans/format/flv"
 	"github.com/tsdrm/go-trans/log"
 	"github.com/tsdrm/go-trans/util"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -124,6 +122,59 @@ func TestTask(t *testing.T) {
 		t.Error(util.S2Json(result))
 		return
 	}
+
+	// add task with empty body
+	result, err = HttpPost("/addTask", util.Map{})
+	if err == nil || !strings.Contains(err.Error(), "Request params error") {
+		t.Error(err)
+		return
+	}
+
+	// add task with invalid body
+	{
+		req, err := http.NewRequest("POST", "/addTask", strings.NewReader("abc"))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		var recorder = httptest.NewRecorder()
+		AddTask(recorder, req)
+		err = util.Json2S(recorder.Body.String(), &result)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if result.Int("code") == 0 {
+			t.Error(util.S2Json(result))
+			return
+		}
+		if strings.Contains(result.String("message"), go_trans.ErrorCode[go_trans.HTTPRequestBodyError]) {
+			t.Error(util.S2Json(result))
+			return
+		}
+	}
+
+	time.Sleep(10 * time.Second)
+
+	// list tasks with invalid page
+	result, err = HttpGet("/listTasks", "page=ab&pageCount=ab")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	tasks = result.AryMap("tasks")
+	count = result.Int("count")
+	if len(tasks) != 0 || count != 0 {
+		t.Error(count, len(tasks))
+		return
+	}
+
+	// cancal task and not found
+	result, err = HttpGet("/cancel", "taskId=akakak")
+	if err == nil || !strings.Contains(err.Error(), go_trans.ErrorCode[go_trans.TransNotFound]) {
+		t.Error(err)
+		return
+	}
 }
 
 func HttpGet(urlStr string, args string) (util.Map, error) {
@@ -138,12 +189,9 @@ func HttpGet(urlStr string, args string) (util.Map, error) {
 		return nil, util.NewError("%v", "not found urlStr")
 	}
 	handler(recorder, req)
-	bys, err := ioutil.ReadAll(recorder.Body)
-	if err != nil {
-		return nil, err
-	}
+
 	var result util.Map
-	err = json.Unmarshal(bys, &result)
+	err = util.Json2S(recorder.Body.String(), &result)
 	if err != nil {
 		return nil, err
 	}
@@ -165,12 +213,9 @@ func HttpPost(urlStr string, body interface{}) (util.Map, error) {
 		return nil, util.NewError("%v", "not found urlStr")
 	}
 	handler(recorder, req)
-	bys, err := ioutil.ReadAll(recorder.Body)
-	if err != nil {
-		return nil, err
-	}
+
 	var result util.Map
-	err = json.Unmarshal(bys, &result)
+	err = util.Json2S(recorder.Body.String(), &result)
 	if err != nil {
 		return nil, err
 	}
